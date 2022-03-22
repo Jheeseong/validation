@@ -19,7 +19,7 @@
 - 고객이 상품등록 폼에서 상품명, 가격 등의 값을 입력 혹은 검증 범위를 넘어서게 작성하였을 경우, 서버 검증 로직이 실패하도록 설계가 필수
 - 실패할 경우 고객에게 다시 삼품 등록 폼을 보여주고, 잘못된 값을 알려줘야 함
 
-**ValidationItemControllerV1 - addItem()
+**ValidationItemControllerV1 - addItem()**
 
     @PostMapping("/add")
     public String addItem(@ModelAttribute Item item, RedirectAttributes redirectAttributes, Model model) {
