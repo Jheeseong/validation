@@ -68,3 +68,76 @@ errors.put("globalError", ...)}**
 
 **if (!errors.isEmpty())**
 - 만약 검증에서 오류가 하나라도 발생 시 오류 메시지 출력을 위해 model에 errors 정보를 담고 입력 폼이 있는 뷰 템플릿으로 전달
+
+**HTML**
+**글로벌 오류 메시지**
+- th:if="${errors?.containsKey('globalError')}"
+- class="field-error" th:text="${errors['globalError']}
+- errors에 내용이 있을 때 globalError을 텍스트로 출력, th:if 조건 만족 시 출력
+- errors?는 errors가 null일 때 nullpointException 대신 null을 반환
+
+**필드 오류 처리**
+- th:classappend="${errors?.containsKey('itemName')} ? 'field-error': _
+- classappend를 사용해서 오류가 존재할 경우 field-error 클래스 정보를 더하여 출력
+
+**문제점**
+- 뷰 템플릿에서 중복처리가 다수 존재
+- 타입 오류 처리가 안됨. Item.price, quantity 경우 Integer이므로 문자 타입으로 설정이 불가능
+- 문자 타입이 들어올 시 오류 발생
+- price, quantity는 문자 보관이 불가능
+- 입력 값 역시 별도의 관리 및 저장이 
+
+# v1.1 3/22
+# Validation V2
+**ValidationItemContorollerV2 - addItemV1**  
+**필드오류 - fieldError**
+
+    if (!StringUtils.hasText(item.getItemName())) {
+            bindingResult.addError(new FieldError("item", "itemName", "상품 이름을 넣어주세요."));
+        }
+        
+- FieldError 생성자 : public FieldError(String objectName, String field, String defaultMessage) {}
+- objectName : @ModelAttribute 이름
+- field : 오류가 발생한 필드 이름
+- defaultMessage : 오류 기본 메시지
+- 필드에 오류 시 fieldError 객체를 생성해서 bindingResult에 저장
+
+**글로벌 오류 - ObjectError**
+
+    if (result < 10000) {
+                bindingResult.addError(new ObjectError("item", "총 가격이 10,000 이상이여야 주문이 가능합니다. 현재 값 = " + result));
+            }
+            
+- ObjectError 생성자 요약 : public ObjectError(String objectName, String defaultMessage) {}
+- objectName : @ModelAttribute의 이름
+- defaultMessage : 오류 기본 메시지
+- 특정 필드를 넘어서는 오류 발생 시 ObjectError 객체를 생성해서 bindinResult에 저장
+
+**HTML**
+- 타임리프는 스프링의 BindingResult를 활용해서 검증 오류를 표현하는 기능을 제공
+- #fields : #fields 로 BindingResult 가 제공하는 검증 오류에 접근
+  - th:if="${#fields.hasGlobalErrors()}
+  -  class="field-error" th:each="err : ${#fields.globalErrors()}" 
+- th:errors : 해당 필드에 오류가 있는 경우에 태그를 출력, th:if 의 편의 버전
+  - class="field-error" th:errors="*{itemName}"
+- th:errorclass : th:field 에서 지정한 필드에 오류가 있으면 class 정보를 추가
+  - th:errorclass="field-error" class="form-control" placeholder="이름을 입력하세요"
+
+# BindingResult
+- 스프링이 제공하는 검증 오류를 보관하는 객체, 오류 발생 시 BindingResult에 보관
+- @ModelAttribute에 데이터 바인딩 시 오류가 발생해도 컨트롤러를 정상 호출
+
+**BindingResult에 검증 오류를 적용하는 3가지 방법**
+- @ModelAttribute의 객체에 타입 오류 등으로 바인딩이 실패하는 경우 스프링이 fieldError 생성해서 BindingResult에 넣음
+- 개발자가 직접 넣음
+- validator 사용
+
+**타입 오류 확인**
+- Integer 부분에 문자를 입력하여 타입이 다를 경우 BindingResult를호출하고 값을 확인
+- BindingResult는 검증할 대상 바로 다음에 와야함. 예를 들어 @ModelAttribute Item item, 다음 BindingResult가 와야 함
+
+**BindingResult 와 Errors
+- BindingResult 는 인터페이스, Errors 인터페이스를 상속
+- 실제 넘어오는 구현체는 BeanPropertyBindingResult 라는 것인데, 둘다 구현하고 있으므로BindingResult 대신에 Errors 를 사용하는 것도 가능
+- 그러나 Errors 인터페이스는 단순한 오류 저장과 조회 기능만 제공
+- BindingResult는 추가적인 기능을 제공
