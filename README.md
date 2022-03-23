@@ -141,3 +141,43 @@ errors.put("globalError", ...)}**
 - 실제 넘어오는 구현체는 BeanPropertyBindingResult 라는 것인데, 둘다 구현하고 있으므로BindingResult 대신에 Errors 를 사용하는 것도 가능
 - 그러나 Errors 인터페이스는 단순한 오류 저장과 조회 기능만 제공
 - BindingResult는 추가적인 기능을 제공
+
+# v1.2 3/23
+# FieldError, ObjectError
+**FieldError 생성자**
+
+    public FieldError(String objectName, String field, @Nullable Object rejectedValue, boolean bindingFailure, @Nullable String[] codes, @Nullable Object[] arguments, @Nullable String defaultMessage)
+    
+- objectName : 오류가 발생한 객체 이름
+- field : 오류 필드
+- rejectedValue : 사용자가 입력한 값(거절된 값)
+- bindingResult : 타임 오류 같은 바인딩 실패, 검증 실패인지 구분 값
+- codes : 메시지 코드
+- arguments : 메시지에서 사용하는 인자
+- defaultMessage : 기본 오류 메시지
+
+**오류 발생 시 사용자 입력 값 보관 및 유지**
+- 사용자의 입력 데이터가 컨트롤러의 @ModelAttribute에 바인딩되는 시점에 오류 발생 시 입력 값 유지가 힘듦
+- fieldError는 오류 발생 시 사용자 입력 값을 저장하는 기능을 제공
+- rejectedValue가 오류 발생 시 입력 값을 저장하는 필드
+
+**HTML 타임리프의 사용자 입력 값 유지
+- th:field="* {price}"
+  - fieldError에서 보관한 값을 사용해서 값을 출력
+
+**스프링의 바인딩 오류 처리**
+- 타입 오류로 바인딩 실패 시 스프링은 FieldError를 생성하면서 사용자 입력 값을 주입
+- 해당 오류를 BindingResult에 담아서 컨트롤러를 호출하기 떄문에 실패 시에도 사용자 오류 메시지가 정상 출력
+
+**Errors 메시지 파일 생성**
+- errors.properties라는 별도 파일을 생성
+- application.properties -> spring.messages.basename=messages,errors 삽입
+- errors.properties 추가 -> required.item.itemName=상품 이름은 필수입니다., range.item.price=가격은 {0} ~ {1} 까지 허용합니다. 등등
+
+**코드 변경**
+
+    new FieldError("item", "price", item.getPrice(), false, new String[]
+    {"range.item.price"}, new Object[]{1000, 1000000}
+    
+- codes : range.item.price를 사용해서 메시지 코드를 지정
+- arguments : Object[]{1000, 1000000}를 사용해서 사용 코드의 {0},{1}에 치환 값을 전달
