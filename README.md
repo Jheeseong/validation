@@ -143,6 +143,7 @@ errors.put("globalError", ...)}**
 - BindingResult는 추가적인 기능을 제공
 
 # v1.2 3/23
+# 오류코드와 메시지 처리1
 # FieldError, ObjectError
 **FieldError 생성자**
 
@@ -181,3 +182,36 @@ errors.put("globalError", ...)}**
     
 - codes : range.item.price를 사용해서 메시지 코드를 지정
 - arguments : Object[]{1000, 1000000}를 사용해서 사용 코드의 {0},{1}에 치환 값을 전달
+
+# v1.3 3/24
+# 오류코드와 메시지 처리2
+# rejectValue(), jeject()
+- BindingResult에서 제공하는 rejectValue(), reject()를 사용하면 fieldError, ObjectError를 생성하지 않고 검증 오류가 가능
+
+**RejectValue**
+
+    void rejectValue(@Nullable String field, String errorCode,@Nullable Object[] errorArgs, @Nullable String defaultMessage);
+    
+- field : 오류 필드 명
+- errorCode : 오류 코드(메시지에 등록된 오류코드가 아닌 messageResolver를 위한 오류 코드)
+- errorArgs : 오류 메시지에서 {0} 치환하기 위한 값
+- defaultMessage : 오류 메시지를 찾을 수 없을 때 사용하는 기본 메시지
+- ex) bindingResult.rejectValue("price", "range", new Object[]{1000, 1000000}, null)
+- bindingREsult는 어떤 객체를 대상으로 검증하는지 target을 이미 알고 있어서 targer(item)에 대한 정보가 없이도 검증이 가능
+
+**reject()**
+
+    void reject(String errorCode, @Nullable Object[] errorArgs, @Nullable String defaultMessage);
+    
+# 오류 코드와 메시지 처리3
+- 오류 코드에서 required.item.itemName 으로 자세하게 조회가 가능할 수도 있고, required로 단순하게 조회도 가능
+- 세밀하게 작성해야하는 경우 세밀한 내용이 적용되도록 메시지에 단계를 둠
+- error.properties
+
+      #Level1
+      required.item.itemName: 상품 이름은 필수 입니다.
+      #Level2
+      required: 필수 값 입니다.
+      
+- 더 자세한 경로의 내용이 우선이고, 없을 경우 단순한 경로의 내용이 조회
+- 스프링 MessageCodesResolver로 이러한 기능을 지원
