@@ -215,3 +215,34 @@ errors.put("globalError", ...)}**
       
 - 더 자세한 경로의 내용이 우선이고, 없을 경우 단순한 경로의 내용이 조회
 - 스프링 MessageCodesResolver로 이러한 기능을 지원
+
+# v1.3 3/24
+# DefaultMessageCodesResolver 기본 메시지 생성
+**동작 방식**
+- rejectValue(), reject()는 내부에서 MessageCodesResolver을 사용
+- fieldError, ObjectError의 생성자를 보면, 여러 오류 코드 가지는 것이 가능
+- MessageCodesResolver를 통해서 생성된 오류 코드를 순서대로 보관
+
+**ex) FieldError rejectValue("itemName", "required")**
+- 다음 4가지 오류 코드를 자동으로 생성
+  - required.item.itemName
+  - required.itemName
+  - required.java.lang.String
+  - required
+
+**ex) ObjectError reject("totalPriceMin")**
+- 다음 2가지 오류 코드를 자동으로 생성
+  - totalPriceMin.item
+  - totalPriceMin
+
+# 오류 코드 관리 전략
+- 구체적인 것을 우선 조회 후, 덜 구제적인 것으로 동작
+  - MessageCodesResolver 는 required.item.itemName 처럼 구체적인 것을 우선 조회 후, required 처럼 덜 구체적인 것을 가장 나중에 생성
+- 복잡하게 사용하는 이유
+  - 모든 오류 코드에 대해서 각각 다 정의 시 관리가 힘듦
+  - 중요도에 따라 분리 후 범용성 있는 required 같은 메시지를 사용하거나, 더 구체적으로 작성하여 사용하는 것이 효과적
+
+# 스프링이 직접 만든 오류 메시지 처리
+- 검증 오류 코드는 **개발자가 설정한 오류 코드**와 **스프링이 직점 검증 오류에 추가** 한 경우 2가지로 분리 가능
+- 타입 오류 시 typeMismach 오류 메시지 코드가 생성
+- error.properties에 **typeMismatch.java.lang.Integer=숫자를 입력해주세요.** 추가 시 오류 메시지가 변경
