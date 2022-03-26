@@ -216,7 +216,7 @@ errors.put("globalError", ...)}**
 - 더 자세한 경로의 내용이 우선이고, 없을 경우 단순한 경로의 내용이 조회
 - 스프링 MessageCodesResolver로 이러한 기능을 지원
 
-# v1.3 3/24
+# v1.4 3/25
 # DefaultMessageCodesResolver 기본 메시지 생성
 **동작 방식**
 - rejectValue(), reject()는 내부에서 MessageCodesResolver을 사용
@@ -246,3 +246,78 @@ errors.put("globalError", ...)}**
 - 검증 오류 코드는 **개발자가 설정한 오류 코드**와 **스프링이 직점 검증 오류에 추가** 한 경우 2가지로 분리 가능
 - 타입 오류 시 typeMismach 오류 메시지 코드가 생성
 - error.properties에 **typeMismatch.java.lang.Integer=숫자를 입력해주세요.** 추가 시 오류 메시지가 변경
+
+# v1.4 3/25
+# Validator 분리 - V1
+**ItemValidator 생성 후 분리**
+
+    @Component
+    @Slf4j
+    public class ItemValidator implements Validator {
+        @Override
+        public boolean supports(Class<?> clazz) {
+            return Item.class.isAssignableFrom(clazz);
+        }
+
+        @Override
+        public void validate(Object target, Errors errors) {
+        
+            Item item = (Item) target;
+
+            log.info("objectName ={}", errors.getObjectName());
+
+            if (!StringUtils.hasText(item.getItemName())) {
+                errors.rejectValue("itemName", "required");
+            }
+            if (item.getPrice() == null || item.getPrice() < 1000 || item.getPrice() > 1000000) {
+                errors.rejectValue("price", "range", new Object[]{1000,1000000}, null);
+            }
+            if (item.getQuantity() == null || item.getQuantity() >= 9999) {
+                errors.rejectValue("quantity","max",new Object[]{9999}, null);
+            }
+            if (item.getQuantity() != null && item.getPrice() != null) {
+                int result = item.getPrice() * item.getQuantity();
+                if (result < 10000) {
+                    errors.reject("totalPriceMin", new Object[]{10000, result}, null);
+                }
+            }
+        }
+    }
+    
+**Interface validator**
+
+    public interface Validator {
+      boolean supports(Class<?> clazz);
+      void validate(Object target, Errors errors);
+    }
+    
+- supports() {} : 해당 검증기를 지원하는 여부 확인
+- validate(Object target, Errors errors : 검증 대상 객체와 bindingResult
+
+# Validator 분리 - v2
+- 체계적으로 검증 기능 도입을 위해 스프링이 Validator 인터페이스를 별도로 제공
+
+**WebDataBinder**
+- 스프링의 파라미터 바인딕의 역할과 검증 기능이 포함
+
+**ValidationITemControllerV2**
+
+    @InitBinder
+    public void init(WebDataBinder dataBinder) {
+      log.info("init binder {}", dataBinder); 
+      dataBinder.addValidators(itemValidator);
+    }
+    
+- WebDataBinder에 검증기 추가 시 해당 컨트롤러에서는 검증기를 자동으로 적용
+- @InitBinder : 해당 컨트롤러에만 영향
+
+**@Validated 적용**
+
+    public String addItemV6(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+    ...
+    }
+    
+- @Validated는 검증기를 실핼하라는 애노테이션
+- 이 애노테이션이 webDataBinder에 등록한 검증기를 찾아서 실행
+- supports() 는 여러 검증기 사용 시 구분하기 위해 사용
+- ex) supports(Item.class) 호출 -> 결과 true -> itemValidator의 validate() 가 호출
