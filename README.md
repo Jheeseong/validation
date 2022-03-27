@@ -247,7 +247,7 @@ errors.put("globalError", ...)}**
 - 타입 오류 시 typeMismach 오류 메시지 코드가 생성
 - error.properties에 **typeMismatch.java.lang.Integer=숫자를 입력해주세요.** 추가 시 오류 메시지가 변경
 
-# v1.4 3/25
+# v1.5 3/26
 # Validator 분리 - V1
 **ItemValidator 생성 후 분리**
 
@@ -321,3 +321,75 @@ errors.put("globalError", ...)}**
 - 이 애노테이션이 webDataBinder에 등록한 검증기를 찾아서 실행
 - supports() 는 여러 검증기 사용 시 구분하기 위해 사용
 - ex) supports(Item.class) 호출 -> 결과 true -> itemValidator의 validate() 가 호출
+
+# v1.6 3/27
+# Validation - BeanValidation
+**BeanValidation**
+- 특정한 구현체가 아닌 Bean Validation2.0(JSR-380)라는 기줄 표준
+- 검증 애노테이션과 여러 인터페이스의 모음
+
+**Item**
+
+    public class Item {
+     
+      private Long id;
+     
+      @NotBlank
+      private String itemName;
+ 
+      @NotNull
+      @Range(min = 1000, max = 1000000)
+      private Integer price; @NotNull
+ 
+      @Max(9999)
+      private Integer quantity;
+      ...
+    }
+   
+
+# Bean Validation 사용
+**Bean Validation 의존관계 추가**
+
+**build.gradle**
+
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+**검증 에노테이션**
+- @NotBlank : 빈값 + 공백만 있는 경우를 허용하지 않음
+- @NotNull : null 을 허용하지 않음
+- @Range(min = 1000, max = 1000000) : 범위 안의 값
+- @Max(9999) : 최대 9999까지만 허용
+
+
+**BeanValidationTest**
+
+    @Test
+    void beanValidation() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
+
+        Item item = new Item();
+        item.setItemName("  ");
+        item.setPrice(0);
+        item.setQuantity(10000);
+
+        Set<ConstraintViolation<Item>> validate = validator.validate(item);
+        for (ConstraintViolation<Item> itemConstraintViolation : validate) {
+            System.out.println("validate = " + validate);
+            System.out.println("itemConstraintViolation.getMessage() = " + itemConstraintViolation.getMessage());
+        }
+    }
+    
+**검증기 생성**
+
+    ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+    Validator validator = factory.getValidator();
+    
+- 스프링과 통합 시에는 코드를 작성하지 않음
+
+**검증 실행**
+
+    Set<ConstraintViolation<Item>> validate = validator.validate(item);
+    
+- 검증 대상을 검증기에 넣고 결과를 받음
+- set에는 contraintViolation이라는 검증 오류가 담기고, 결과가 비어있을 경우 오류가 없는 
