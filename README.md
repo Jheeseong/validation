@@ -393,3 +393,47 @@ errors.put("globalError", ...)}**
     
 - 검증 대상을 검증기에 넣고 결과를 받음
 - set에는 contraintViolation이라는 검증 오류가 담기고, 결과가 비어있을 경우 오류가 없는 
+
+# v1.7 3/28
+# Bean Validation - 스프링 적용
+
+**ValidationItemControllerV3**
+
+    @PostMapping("/add")
+    public String addItemV1(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+        if (item.getQuantity() != null && item.getPrice() != null) {
+            int result = item.getPrice() * item.getQuantity();
+            if (result < 10000) {
+                bindingResult.reject("totalPriceMin", new Object[]{10000, result}, null);
+            }
+        }
+
+        // 에러가 있을 시 다시 입력 폼으로
+        if (bindingResult.hasErrors()) {
+            log.info("errors={}", bindingResult);
+            return "validation/v3/addForm";
+        }
+        // 성공 로직
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v3/items/{itemId}";
+    }
+    
+**스프링MVC에 Bean Validation 사용**
+- spring-boot-starter-validation 라이브러리를 넣을 시 스트링 부트가 자동으로 Bean Validator를 인지하고 스프링에 통합
+
+**스프링 부트의 자동 글로벌 validator 등록**
+- LocalValidatorFactoryBean을 글로벌 validator로 등록
+- 이 validator은 @NotNull 같은 애노테이션을 보고 검증을 수행
+- 검증 오류 발생 시 FieldError, ObjectError를 생성해서 BindingResult에 저장
+
+**검증 순서**
+1. @ModelAttribute 각각의 필드에 타입 변환 시도(실패 시 typeMismatch로 FieldError 추가)
+2. Validator 적용
+
+**바인딩에 성공한 필드만 Bean Validation 적용**
+- BeanValidator는 바인딩에 실패한 필드는 적용 X
+- 타입 변환에 성곡해서 바인딩에 성공한 필드여야 적용
+- ex) itemName에 문자 "A' 입력 -> 타입 변환 성공 -> itemName 필드에 BeanValidation 적용
+- ex) price에 문자 'A' 입력 -> 숫자 타입 변환 실패 -> typeMismatch FieldError 추가 -> price 필드는 BeanValidation 적용 X
