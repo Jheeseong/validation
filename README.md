@@ -455,7 +455,7 @@ errors.put("globalError", ...)}**
 - Range.java.lang.Integer
 - Range
 
-**BeanValidation 메시지 찾는 순서
+**BeanValidation 메시지 찾는 순서**
 1. 생성된 메시지 코드 순서대로 messageSource에서 메시지 찾기
 2. 애노테이션 message 속성 사용 -> @NotBlank(message = "공백! {0})
 3. 라이브러리가 제공하는 기본 값 사용 -> 공백일 수 없습니다.
@@ -463,7 +463,7 @@ errors.put("globalError", ...)}**
 # Bean Validation - 오브젝트 오류
 - @ScriptAssert()를 사용하여 오브젝트 관련 오류 처리가 가능
 
-**ex) @ScriptAssert 애노테이션 사용
+**ex) @ScriptAssert 애노테이션 사용**
 
     @Data
     @ScriptAssert(lang = "javascript", script = "_this.price * _this.quantity >= 10000")
@@ -474,7 +474,7 @@ errors.put("globalError", ...)}**
 - 실직적으로 사용 시 제약이 많고 복잡, 실무에서는 검증 기능이 해당 객체 범위를 넘는 경우도 존재해서 대응이 힘듦
 - 오브젝트 오류의 경우 억지로 사용보다는 오브젝트 오류 관련 부분만 자바 코드로 작성
 
-**ValidationItemControllerV3 - 글로벌 오류 추가
+**ValidationItemControllerV3 - 글로벌 오류 추가**
 
     @PostMapping("/add")
     public String addItemV1(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
