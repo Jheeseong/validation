@@ -437,3 +437,61 @@ errors.put("globalError", ...)}**
 - 타입 변환에 성곡해서 바인딩에 성공한 필드여야 적용
 - ex) itemName에 문자 "A' 입력 -> 타입 변환 성공 -> itemName 필드에 BeanValidation 적용
 - ex) price에 문자 'A' 입력 -> 숫자 타입 변환 실패 -> typeMismatch FieldError 추가 -> price 필드는 BeanValidation 적용 X
+
+# v1.8 3/29
+# Bean Validation - 에러 코드
+- 오류 코드가 애노테이션 이름으로 등록, typeMismatch와 유사
+- MessageCodesResolver를 통해 다양한 메시지 코드가 순서대로 생성
+
+**ex) @NotBlank**
+- NotBlank.item.itemName
+- NotBlank.itemName
+- NotBlank.java.lang.String
+- NotBlank
+
+**ex) @Range**
+- Range.item.price
+- Range.price
+- Range.java.lang.Integer
+- Range
+
+**BeanValidation 메시지 찾는 순서
+1. 생성된 메시지 코드 순서대로 messageSource에서 메시지 찾기
+2. 애노테이션 message 속성 사용 -> @NotBlank(message = "공백! {0})
+3. 라이브러리가 제공하는 기본 값 사용 -> 공백일 수 없습니다.
+
+# Bean Validation - 오브젝트 오류
+- @ScriptAssert()를 사용하여 오브젝트 관련 오류 처리가 가능
+
+**ex) @ScriptAssert 애노테이션 사용
+
+    @Data
+    @ScriptAssert(lang = "javascript", script = "_this.price * _this.quantity >= 10000")
+    public class Item {
+    //...
+    }
+
+- 실직적으로 사용 시 제약이 많고 복잡, 실무에서는 검증 기능이 해당 객체 범위를 넘는 경우도 존재해서 대응이 힘듦
+- 오브젝트 오류의 경우 억지로 사용보다는 오브젝트 오류 관련 부분만 자바 코드로 작성
+
+**ValidationItemControllerV3 - 글로벌 오류 추가
+
+    @PostMapping("/add")
+    public String addItemV1(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+        if (item.getQuantity() != null && item.getPrice() != null) {
+            int result = item.getPrice() * item.getQuantity();
+            if (result < 10000) {
+                bindingResult.reject("totalPriceMin", new Object[]{10000, result}, null);
+            }
+        }
+
+        // 에러가 있을 시 다시 입력 폼으로
+        if (bindingResult.hasErrors()) {
+            log.info("errors={}", bindingResult);
+            return "validation/v3/addForm";
+        }
+        // 성공 로직
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v3/items/{itemId}";
