@@ -474,7 +474,7 @@ errors.put("globalError", ...)}**
 - 실직적으로 사용 시 제약이 많고 복잡, 실무에서는 검증 기능이 해당 객체 범위를 넘는 경우도 존재해서 대응이 힘듦
 - 오브젝트 오류의 경우 억지로 사용보다는 오브젝트 오류 관련 부분만 자바 코드로 작성
 
-**ValidationItemControllerV3 - 글로벌 오류 추가**
+# ValidationItemControllerV3 - 글로벌 오류 추가
 
     @PostMapping("/add")
     public String addItemV1(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
@@ -495,3 +495,101 @@ errors.put("globalError", ...)}**
         redirectAttributes.addAttribute("itemId", savedItem.getId());
         redirectAttributes.addAttribute("status", true);
         return "redirect:/validation/v3/items/{itemId}";
+
+# v1.9 3/31
+# Bean Validation - 수정에 적용
+
+    @PostMapping("/{itemId}/edit")
+    public String edit(@PathVariable Long itemId, @Validated @ModelAttribute Item item, BindingResult bindingResult) {
+    ....
+    
+      if (bindingResult.hasErrors()) {
+      log.info("errors={}", bindingResult);
+      return "validation/v3/editForm";
+      }
+    ....
+    }
+    
+- edit() : item 모델 객체에 @Validated 추가
+- 검증 오류 발생 시, editForm으로 이동하는 코드 추가
+
+# Bean Validation - 한계
+- 수정 시 요구사항
+  - 등록 시에는 quantity 수량을 최대 9999개까지 등록하지만 수정 시에는 무제한으로 변경하도록 수정
+  - 등록 시에는 id 값이 없어도 되지만, 수정 시에는 id 값이 필수
+
+**수정 요구사항 적용**
+
+    @Data
+    public class Item {
+       
+       @NotNull //수정 요구사항 추가
+       private Long id;
+       
+       @NotBlank
+       private String itemName;
+       
+       @NotNull
+       @Range(min = 1000, max = 1000000) 
+       private Integer price;
+       
+       @NotNull
+       //@Max(9999) //수정 요구사항 추가
+       private Integer quantity;
+      
+      ....
+    }
+     
+- id : @NotNull 추가
+- quiantity : @Max(9999) 제거
+
+**오류 및 문제 발생**
+- 수정에서는 잘 동작하지만, 등록 시에는 id에 값이 없고, 수량제한 최대 값인 9999도 적용 X
+- 등록 시 화면이 넘어가지 않으면서 'id': rejected value [null] 에러 발생, 등록 시에는 id 값이 없어서 검증에 실패
+
+# Bean Validation - groups
+**2가지 방법**
+- BeanValidation의 groups 기능을 사용
+- item을 직접 사용하지 않고, ItemSaveForm, ItemUpdateForm으로 폼 전송을 위한 객체를 분리
+
+**BeanValidation groups 기능 사용**
+**CreateCheck**, **UpdateCheck** groups 인터페이스 생성
+
+**Item - groups 적용**
+
+    @Data
+public class Item {
+    @NotNull(groups = UpdateCheck.class)
+    private Long id;
+    @NotBlank(groups = {CreateCheck.class, UpdateCheck.class})
+    private String itemName;
+
+    @NotNull(groups = {CreateCheck.class, UpdateCheck.class})
+    @Range(min = 1000, max = 1000000, groups = {CreateCheck.class, UpdateCheck.class})
+    private Integer price;
+
+    @NotNull(groups = {CreateCheck.class, UpdateCheck.class})
+    @Max(value = 9999, groups = CreateCheck.class)
+    private Integer quantity;
+
+    ....
+    }
+
+**ValidationItemControllerV3 - 저장 로직에 CreateCheck Groups 적용**
+
+    @PostMapping("/add")
+    public String addItemV2(@Validated(CreateCheck.class) @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+    
+    ....
+    }
+    
+- CreateCheck.class 적용
+
+**ValidationItemControllerV3 - 수정 로직에 UpdateCheck Groups 적용**
+
+    public String edit(@PathVariable Long itemId, @Validated(UpdateCheck.class) @ModelAttribute Item item, BindingResult bindingResult) {
+    
+    ....
+    }
+    
+- UpdateCheck.class 
