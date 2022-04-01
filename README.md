@@ -247,7 +247,7 @@ errors.put("globalError", ...)}**
 - 타입 오류 시 typeMismach 오류 메시지 코드가 생성
 - error.properties에 **typeMismatch.java.lang.Integer=숫자를 입력해주세요.** 추가 시 오류 메시지가 변경
 
-# v1.4 3/25
+# v1.5 3/26
 # Validator 분리 - V1
 **ItemValidator 생성 후 분리**
 
@@ -321,3 +321,344 @@ errors.put("globalError", ...)}**
 - 이 애노테이션이 webDataBinder에 등록한 검증기를 찾아서 실행
 - supports() 는 여러 검증기 사용 시 구분하기 위해 사용
 - ex) supports(Item.class) 호출 -> 결과 true -> itemValidator의 validate() 가 호출
+
+# v1.6 3/27
+# Validation - BeanValidation
+**BeanValidation**
+- 특정한 구현체가 아닌 Bean Validation2.0(JSR-380)라는 기줄 표준
+- 검증 애노테이션과 여러 인터페이스의 모음
+
+**Item**
+
+    public class Item {
+     
+      private Long id;
+     
+      @NotBlank
+      private String itemName;
+ 
+      @NotNull
+      @Range(min = 1000, max = 1000000)
+      private Integer price; @NotNull
+ 
+      @Max(9999)
+      private Integer quantity;
+      ...
+    }
+   
+
+# Bean Validation 사용
+**Bean Validation 의존관계 추가**
+
+**build.gradle**
+
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+**검증 에노테이션**
+- @NotBlank : 빈값 + 공백만 있는 경우를 허용하지 않음
+- @NotNull : null 을 허용하지 않음
+- @Range(min = 1000, max = 1000000) : 범위 안의 값
+- @Max(9999) : 최대 9999까지만 허용
+
+
+**BeanValidationTest**
+
+    @Test
+    void beanValidation() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
+
+        Item item = new Item();
+        item.setItemName("  ");
+        item.setPrice(0);
+        item.setQuantity(10000);
+
+        Set<ConstraintViolation<Item>> validate = validator.validate(item);
+        for (ConstraintViolation<Item> itemConstraintViolation : validate) {
+            System.out.println("validate = " + validate);
+            System.out.println("itemConstraintViolation.getMessage() = " + itemConstraintViolation.getMessage());
+        }
+    }
+    
+**검증기 생성**
+
+    ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+    Validator validator = factory.getValidator();
+    
+- 스프링과 통합 시에는 코드를 작성하지 않음
+
+**검증 실행**
+
+    Set<ConstraintViolation<Item>> validate = validator.validate(item);
+    
+- 검증 대상을 검증기에 넣고 결과를 받음
+- set에는 contraintViolation이라는 검증 오류가 담기고, 결과가 비어있을 경우 오류가 없는 
+
+# v1.7 3/28
+# Bean Validation - 스프링 적용
+
+**ValidationItemControllerV3**
+
+    @PostMapping("/add")
+    public String addItemV1(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+        if (item.getQuantity() != null && item.getPrice() != null) {
+            int result = item.getPrice() * item.getQuantity();
+            if (result < 10000) {
+                bindingResult.reject("totalPriceMin", new Object[]{10000, result}, null);
+            }
+        }
+
+        // 에러가 있을 시 다시 입력 폼으로
+        if (bindingResult.hasErrors()) {
+            log.info("errors={}", bindingResult);
+            return "validation/v3/addForm";
+        }
+        // 성공 로직
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v3/items/{itemId}";
+    }
+    
+**스프링MVC에 Bean Validation 사용**
+- spring-boot-starter-validation 라이브러리를 넣을 시 스트링 부트가 자동으로 Bean Validator를 인지하고 스프링에 통합
+
+**스프링 부트의 자동 글로벌 validator 등록**
+- LocalValidatorFactoryBean을 글로벌 validator로 등록
+- 이 validator은 @NotNull 같은 애노테이션을 보고 검증을 수행
+- 검증 오류 발생 시 FieldError, ObjectError를 생성해서 BindingResult에 저장
+
+**검증 순서**
+1. @ModelAttribute 각각의 필드에 타입 변환 시도(실패 시 typeMismatch로 FieldError 추가)
+2. Validator 적용
+
+**바인딩에 성공한 필드만 Bean Validation 적용**
+- BeanValidator는 바인딩에 실패한 필드는 적용 X
+- 타입 변환에 성곡해서 바인딩에 성공한 필드여야 적용
+- ex) itemName에 문자 "A' 입력 -> 타입 변환 성공 -> itemName 필드에 BeanValidation 적용
+- ex) price에 문자 'A' 입력 -> 숫자 타입 변환 실패 -> typeMismatch FieldError 추가 -> price 필드는 BeanValidation 적용 X
+
+# v1.8 3/29
+# Bean Validation - 에러 코드
+- 오류 코드가 애노테이션 이름으로 등록, typeMismatch와 유사
+- MessageCodesResolver를 통해 다양한 메시지 코드가 순서대로 생성
+
+**ex) @NotBlank**
+- NotBlank.item.itemName
+- NotBlank.itemName
+- NotBlank.java.lang.String
+- NotBlank
+
+**ex) @Range**
+- Range.item.price
+- Range.price
+- Range.java.lang.Integer
+- Range
+
+**BeanValidation 메시지 찾는 순서**
+1. 생성된 메시지 코드 순서대로 messageSource에서 메시지 찾기
+2. 애노테이션 message 속성 사용 -> @NotBlank(message = "공백! {0})
+3. 라이브러리가 제공하는 기본 값 사용 -> 공백일 수 없습니다.
+
+# Bean Validation - 오브젝트 오류
+- @ScriptAssert()를 사용하여 오브젝트 관련 오류 처리가 가능
+
+**ex) @ScriptAssert 애노테이션 사용**
+
+    @Data
+    @ScriptAssert(lang = "javascript", script = "_this.price * _this.quantity >= 10000")
+    public class Item {
+    //...
+    }
+
+- 실직적으로 사용 시 제약이 많고 복잡, 실무에서는 검증 기능이 해당 객체 범위를 넘는 경우도 존재해서 대응이 힘듦
+- 오브젝트 오류의 경우 억지로 사용보다는 오브젝트 오류 관련 부분만 자바 코드로 작성
+
+# ValidationItemControllerV3 - 글로벌 오류 추가
+
+    @PostMapping("/add")
+    public String addItemV1(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+        if (item.getQuantity() != null && item.getPrice() != null) {
+            int result = item.getPrice() * item.getQuantity();
+            if (result < 10000) {
+                bindingResult.reject("totalPriceMin", new Object[]{10000, result}, null);
+            }
+        }
+
+        // 에러가 있을 시 다시 입력 폼으로
+        if (bindingResult.hasErrors()) {
+            log.info("errors={}", bindingResult);
+            return "validation/v3/addForm";
+        }
+        // 성공 로직
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v3/items/{itemId}";
+
+# v1.9 3/31
+# Bean Validation - 수정에 적용
+
+    @PostMapping("/{itemId}/edit")
+    public String edit(@PathVariable Long itemId, @Validated @ModelAttribute Item item, BindingResult bindingResult) {
+    ....
+    
+      if (bindingResult.hasErrors()) {
+      log.info("errors={}", bindingResult);
+      return "validation/v3/editForm";
+      }
+    ....
+    }
+    
+- edit() : item 모델 객체에 @Validated 추가
+- 검증 오류 발생 시, editForm으로 이동하는 코드 추가
+
+# Bean Validation - 한계
+- 수정 시 요구사항
+  - 등록 시에는 quantity 수량을 최대 9999개까지 등록하지만 수정 시에는 무제한으로 변경하도록 수정
+  - 등록 시에는 id 값이 없어도 되지만, 수정 시에는 id 값이 필수
+
+**수정 요구사항 적용**
+
+    @Data
+    public class Item {
+       
+       @NotNull //수정 요구사항 추가
+       private Long id;
+       
+       @NotBlank
+       private String itemName;
+       
+       @NotNull
+       @Range(min = 1000, max = 1000000) 
+       private Integer price;
+       
+       @NotNull
+       //@Max(9999) //수정 요구사항 추가
+       private Integer quantity;
+      
+      ....
+    }
+     
+- id : @NotNull 추가
+- quiantity : @Max(9999) 제거
+
+**오류 및 문제 발생**
+- 수정에서는 잘 동작하지만, 등록 시에는 id에 값이 없고, 수량제한 최대 값인 9999도 적용 X
+- 등록 시 화면이 넘어가지 않으면서 'id': rejected value [null] 에러 발생, 등록 시에는 id 값이 없어서 검증에 실패
+
+# Bean Validation - groups
+**2가지 방법**
+- BeanValidation의 groups 기능을 사용
+- item을 직접 사용하지 않고, ItemSaveForm, ItemUpdateForm으로 폼 전송을 위한 객체를 분리
+
+**BeanValidation groups 기능 사용**
+**CreateCheck**, **UpdateCheck** groups 인터페이스 생성
+
+**Item - groups 적용**
+
+    @Data
+public class Item {
+    @NotNull(groups = UpdateCheck.class)
+    private Long id;
+    @NotBlank(groups = {CreateCheck.class, UpdateCheck.class})
+    private String itemName;
+
+    @NotNull(groups = {CreateCheck.class, UpdateCheck.class})
+    @Range(min = 1000, max = 1000000, groups = {CreateCheck.class, UpdateCheck.class})
+    private Integer price;
+
+    @NotNull(groups = {CreateCheck.class, UpdateCheck.class})
+    @Max(value = 9999, groups = CreateCheck.class)
+    private Integer quantity;
+
+    ....
+    }
+
+**ValidationItemControllerV3 - 저장 로직에 CreateCheck Groups 적용**
+
+    @PostMapping("/add")
+    public String addItemV2(@Validated(CreateCheck.class) @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes) {
+    
+    ....
+    }
+    
+- CreateCheck.class 적용
+
+**ValidationItemControllerV3 - 수정 로직에 UpdateCheck Groups 적용**
+
+    public String edit(@PathVariable Long itemId, @Validated(UpdateCheck.class) @ModelAttribute Item item, BindingResult bindingResult) {
+    
+    ....
+    }
+    
+- UpdateCheck.class 
+
+# v1.10 4/1
+# Form 전송 객체 분리
+- 등록 시 폼에서 전달하는 데이터가 Item 도메인 객체와 맞지 않아 실무에서는 groups를 사용X
+- 실무에서는 회원 관련된 데이터만 전달 받는 것이 아닌 더 많고 다양한 데이터를 추가로 받기에 맞지 않음
+- groups를 사용할 경우 Item을 직접 전달 받지 않고, 복잡한 폼의 데이터를 컨트롤러까지 전달할 별도의 객체를 만들어서 전달
+
+**폼 데이터 전달에 ITem 도메인 객체 사용
+- HTML Form -> Item -> Controller -> Item -> Repository
+  - 장점 : item 도메인 객체를 컨트롤러, 리포지토리까지 직접 전달
+  - 단점 : 간단한 경우 적용 가능, 수정 시 검증이 중복되고 groups를 사용
+
+**폼 데이터 전달을 위한 별도의 객체 사용
+- HTML Form -> ItemSaveForm -> Controller -> Item 생성 -> Repository
+  - 장점 :전송하는 폼 데이터가 복잡해도 거기게 맞춘 별도의 폼 객체를 사용해서 데이터 전달 가능, 등록, 수정용 별도의 폼 객체를 만들어 검증 중복X
+  - 단점 : 폼 데이터 기반으로 컨트롤러에서 item 객체를 생성하는 변환 과정이 추가
+
+**CreateItemForm**
+
+    @Data
+    public class CreateItemForm {
+
+        @NotBlank
+        private String itemName;
+
+        @NotNull
+        @Range(min = 1000, max = 1000000)
+        private Integer price;
+
+        @NotNull
+        @Max(value = 9999)
+        private Integer quantity;
+    }
+    
+**UpdateItemForm
+    
+    @Data
+    public class UpdateItemForm {
+
+        @NotNull
+        private Long id;
+
+        @NotBlank
+        private String itemName;
+
+        @NotNull
+        @Range(min = 1000, max = 1000000)
+        private Integer price;
+
+        //수정에서는 수량은 자유롭게 변경할 수 있다.
+        private Integer quantity;
+    }
+    
+**ValidationItemControllerV4**
+
+    @PostMapping("/add")
+    public String addItem(@Validated @ModelAttribute("item") CreateItemForm form, BindingResult bindingResult, RedirectAttributes redirectAttributes) 
+    
+    @PostMapping("/{itemId}/edit")
+    public String edit(@PathVariable Long itemId, @Validated @ModelAttribute("item") UpdateItemForm form, BindingResult bindingResult) 
+    
+- Item 대신에 CreateItemForm, UpdateItemForm을 분리하여 전달, 그리고 @Validated 검증, BindingResult로 검증 결과 받음
+- @ModelAttribute("item")에 item 은 기존의 뷰 템플릿에 item으로 전달을 하기에 그대로 유지
+
+**폼 객체를 Item으로 변환**
+
+    Item item = new Item(form.getItemName(), form.getPrice(), form.getQuantity());
+
+- 폼 객체 처럼 중간에 다른 객체가 추가시 변환하는 과정을 추가 작성
