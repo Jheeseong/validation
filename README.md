@@ -593,3 +593,72 @@ public class Item {
     }
     
 - UpdateCheck.class 
+
+# v1.10 4/1
+# Form 전송 객체 분리
+- 등록 시 폼에서 전달하는 데이터가 Item 도메인 객체와 맞지 않아 실무에서는 groups를 사용X
+- 실무에서는 회원 관련된 데이터만 전달 받는 것이 아닌 더 많고 다양한 데이터를 추가로 받기에 맞지 않음
+- groups를 사용할 경우 Item을 직접 전달 받지 않고, 복잡한 폼의 데이터를 컨트롤러까지 전달할 별도의 객체를 만들어서 전달
+
+**폼 데이터 전달에 ITem 도메인 객체 사용
+- HTML Form -> Item -> Controller -> Item -> Repository
+  - 장점 : item 도메인 객체를 컨트롤러, 리포지토리까지 직접 전달
+  - 단점 : 간단한 경우 적용 가능, 수정 시 검증이 중복되고 groups를 사용
+
+**폼 데이터 전달을 위한 별도의 객체 사용
+- HTML Form -> ItemSaveForm -> Controller -> Item 생성 -> Repository
+  - 장점 :전송하는 폼 데이터가 복잡해도 거기게 맞춘 별도의 폼 객체를 사용해서 데이터 전달 가능, 등록, 수정용 별도의 폼 객체를 만들어 검증 중복X
+  - 단점 : 폼 데이터 기반으로 컨트롤러에서 item 객체를 생성하는 변환 과정이 추가
+
+**CreateItemForm**
+
+    @Data
+    public class CreateItemForm {
+
+        @NotBlank
+        private String itemName;
+
+        @NotNull
+        @Range(min = 1000, max = 1000000)
+        private Integer price;
+
+        @NotNull
+        @Max(value = 9999)
+        private Integer quantity;
+    }
+    
+**UpdateItemForm
+    
+    @Data
+    public class UpdateItemForm {
+
+        @NotNull
+        private Long id;
+
+        @NotBlank
+        private String itemName;
+
+        @NotNull
+        @Range(min = 1000, max = 1000000)
+        private Integer price;
+
+        //수정에서는 수량은 자유롭게 변경할 수 있다.
+        private Integer quantity;
+    }
+    
+**ValidationItemControllerV4**
+
+    @PostMapping("/add")
+    public String addItem(@Validated @ModelAttribute("item") CreateItemForm form, BindingResult bindingResult, RedirectAttributes redirectAttributes) 
+    
+    @PostMapping("/{itemId}/edit")
+    public String edit(@PathVariable Long itemId, @Validated @ModelAttribute("item") UpdateItemForm form, BindingResult bindingResult) 
+    
+- Item 대신에 CreateItemForm, UpdateItemForm을 분리하여 전달, 그리고 @Validated 검증, BindingResult로 검증 결과 받음
+- @ModelAttribute("item")에 item 은 기존의 뷰 템플릿에 item으로 전달을 하기에 그대로 유지
+
+**폼 객체를 Item으로 변환**
+
+    Item item = new Item(form.getItemName(), form.getPrice(), form.getQuantity());
+
+- 폼 객체 처럼 중간에 다른 객체가 추가시 변환하는 과정을 추가 작성
