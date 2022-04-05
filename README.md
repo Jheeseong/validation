@@ -664,3 +664,47 @@ public class Item {
 - 폼 객체 처럼 중간에 다른 객체가 추가시 변환하는 과정을 추가 작성
 
 # v1.11 4/5
+# Bean Validation - Http 메시지 컨버터
+- @Valid, @Validated는 HttpMessageConverter(@RequestBody)에 적용이 가능
+
+**ValidationItemApiController 생성**
+
+    @RestController
+    @RequestMapping("/validation/api/items")
+    @Slf4j
+    public class ValidationItemApiController {
+
+        @PostMapping("/add")
+        public Object addItem(@RequestBody @Validated CreateItemForm form,
+                              BindingResult bindingResult) {
+            log.info("API 컨트롤러 호출");
+
+            if (bindingResult.hasErrors()) {
+                log.info("검증 오류 발생 error={}", bindingResult);
+                return bindingResult.getAllErrors();
+            }
+
+            log.info("성공 로직 실행");
+            return form;
+        }
+    }
+    
+**API 테스트 - 객체타입 오류**
+- 성공 요청 : POST http://localhost:8080/validation/api/items/add, {"itemName":"hello", "price":1000, "quantity": 10}
+  - 성공 요청 로그 : API 컨트롤러 호출, 성공 로직 실행
+  - 객체에 맞는 타입 입력 시 성공
+- 실패 요청 : POST http://localhost:8080/validation/api/items/add, {"itemName":"hello", "price":"A", "quantity": 10}
+  - 실패 요청 결과 : 400 status 에러 발생
+  - price는 integer이지만 spring을 입력하여 에러 발생
+
+**API 테스트 - Validator 오류**
+- 실패 요청 : POST http://localhost:8080/validation/api/items/add, {"itemName":"hello", "price":1000, "quantity": 10000}
+  - 수량(quantity)이 10000이면 BeanValidation @Max(9999)에서 걸림
+  - return bindingResult.getAllErrors();는 ObjectError와 fieldError를 반환하고, 스프링이 이 객체를 JSON으로 변환해서 클라이언트에 전달
+
+**@ModelAttribute VS @RequestBody**
+- Http 요청 파라미터를 처리하는 @ModelAttribute는 각각의 필드 단위로 세밀하게 적용, 특정 필드에 타입이 맞지않는 오류가 발생해도 나머지 필드는 정상 처리
+- HttpMessageConverter는 @ModelAttribute와 다르게 각각의 필드 단위로 적용되는 것이 아니라, 전체 객체 단위로 적용
+- 따라서 메시지 컨버터의 작동이 성공해서 Item 객체를 만들어야 @Valid, @Validated가 적용
+- @ModelAttribute : 필드 단위로 정교하게 바인딩이 적용, 특정 필드가 바인딩 되지 않아도 나머지 필드는 정상 바인딩 되고, Validator를 사용한 검증 적용이 가능
+- @RequestBody : HttpMessageConverter 단계에서 JSON 데이터를 객체로 변경하지 못하면 이후 단계가 진행되지 않고 예외 발생, 컨트롤러 호출X, Validator 적용X
